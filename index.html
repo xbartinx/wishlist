@@ -61,8 +61,8 @@
         
         <!-- Personen Umschalter -->
         <div class="flex bg-gray-200 dark:bg-dark-card p-1 rounded-2xl mb-6 shadow-inner">
-            <button onclick="setPerson('Bela')" id="tab-bela" class="flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm">👶 Bela</button>
-            <button onclick="setPerson('Lola')" id="tab-lola" class="flex-1 py-3 rounded-xl font-bold text-sm transition-all">👧 Lola</button>
+            <button onclick="setPerson('Bela')" id="tab-bela" class="flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm bg-white dark:bg-dark-card text-brand-500">👶 Bela</button>
+            <button onclick="setPerson('Lola')" id="tab-lola" class="flex-1 py-3 rounded-xl font-bold text-sm transition-all text-gray-500">👧 Lola</button>
         </div>
 
         <!-- Wunsch hinzufügen Button -->
@@ -78,7 +78,7 @@
     </main>
 
     <!-- Modal für Wunsch hinzufügen/bearbeiten -->
-    <div id="wish-modal" class="fixed inset-0 z-40 hidden bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div id="wish-modal" class="fixed inset-0 z-40 hidden bg-black/50 backdrop-blur-sm items-end sm:items-center justify-center p-0 sm:p-4">
         <div class="bg-white dark:bg-dark-card w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h2 id="modal-title" class="text-xl font-bold">Wunsch hinzufügen</h2>
@@ -169,8 +169,16 @@
 
         function setPerson(person) {
             currentPerson = person;
-            document.getElementById('tab-bela').className = person === 'Bela' ? 'flex-1 py-3 rounded-xl font-bold text-sm bg-white dark:bg-dark-card shadow-sm text-brand-500' : 'flex-1 py-3 rounded-xl font-bold text-sm text-gray-500';
-            document.getElementById('tab-lola').className = person === 'Lola' ? 'flex-1 py-3 rounded-xl font-bold text-sm bg-white dark:bg-dark-card shadow-sm text-brand-500' : 'flex-1 py-3 rounded-xl font-bold text-sm text-gray-500';
+            const btnBela = document.getElementById('tab-bela');
+            const btnLola = document.getElementById('tab-lola');
+            
+            if (person === 'Bela') {
+                btnBela.className = 'flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm bg-white dark:bg-dark-card text-brand-500';
+                btnLola.className = 'flex-1 py-3 rounded-xl font-bold text-sm transition-all text-gray-500';
+            } else {
+                btnLola.className = 'flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm bg-white dark:bg-dark-card text-brand-500';
+                btnBela.className = 'flex-1 py-3 rounded-xl font-bold text-sm transition-all text-gray-500';
+            }
             renderWishes();
         }
 
@@ -180,7 +188,6 @@
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                // Komprimiere das Bild über ein Canvas, um den LocalStorage nicht zu sprengen
                 const img = new Image();
                 img.onload = function() {
                     const canvas = document.createElement('canvas');
@@ -288,11 +295,15 @@
                 document.getElementById('wish-priority').value = '🌟 Top-Wunsch';
                 clearImage();
             }
-            document.getElementById('wish-modal').classList.remove('hidden');
+            const modal = document.getElementById('wish-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
 
         function closeModal() {
-            document.getElementById('wish-modal').classList.add('hidden');
+            const modal = document.getElementById('wish-modal');
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
         }
 
         function saveWish() {
@@ -310,4 +321,67 @@
                 desc,
                 priority,
                 image: currentImageBase64,
-                done: index >= 0 ? wishes[currentPerson][index].done
+                done: index >= 0 ? wishes[currentPerson][index].done : false
+            };
+
+            if (index >= 0) {
+                wishes[currentPerson][index] = wishData;
+            } else {
+                if (!wishes[currentPerson]) wishes[currentPerson] = [];
+                wishes[currentPerson].push(wishData);
+            }
+
+            localStorage.setItem('christmas_wishes', JSON.stringify(wishes));
+            closeModal();
+            renderWishes();
+            showToast('Wunsch gespeichert!');
+        }
+
+        function toggleDone(index) {
+            wishes[currentPerson][index].done = !wishes[currentPerson][index].done;
+            localStorage.setItem('christmas_wishes', JSON.stringify(wishes));
+            renderWishes();
+        }
+
+        function editWish(index) {
+            openModal(index);
+        }
+
+        function deleteWish(index) {
+            if (confirm('Wunsch wirklich löschen?')) {
+                wishes[currentPerson].splice(index, 1);
+                localStorage.setItem('christmas_wishes', JSON.stringify(wishes));
+                renderWishes();
+                showToast('Wunsch gelöscht');
+            }
+        }
+
+        function exportWishlist() {
+            let text = `🎄 WEIHNACHTS-WUNSCHLISTE 🎄\n\n`;
+            ['Bela', 'Lola'].forEach(p => {
+                text += `--- ${p.toUpperCase()} ---\n`;
+                let list = wishes[p] || [];
+                if (list.length === 0) text += `(Keine Wünsche)\n`;
+                list.forEach((w, i) => {
+                    text += `${i+1}. [${w.done ? 'X' : ' '}] ${w.title} (${w.priority})\n`;
+                    if (w.desc) text += `   Info: ${w.desc}\n`;
+                });
+                text += `\n`;
+            });
+
+            if (navigator.share) {
+                navigator.share({ title: 'Weihnachts-Wunschliste', text: text }).catch(() => {});
+            } else {
+                let blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                let url = URL.createObjectURL(blob);
+                let a = document.createElement('a');
+                a.href = url;
+                a.download = `Wunschliste_Bela_Lola.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('Wunschliste exportiert!');
+            }
+        }
+    </script>
+</body>
+</html>
