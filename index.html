@@ -648,7 +648,72 @@
                 padding-bottom: 24px;
             }
         }
-    </style>
+
+        [hidden] { display: none !important; }
+        .auth-screen {
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 28px 20px;
+            background: var(--bg);
+        }
+        .auth-panel {
+            width: 100%;
+            max-width: 420px;
+            padding: 28px 22px;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: var(--card);
+            box-shadow: var(--shadow);
+        }
+        .auth-panel h1 {
+            margin: 0 0 8px;
+            text-align: center;
+            font-size: 25px;
+        }
+        .auth-panel p {
+            margin: 0 0 24px;
+            color: var(--muted);
+            text-align: center;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .auth-panel input {
+            width: 100%;
+            padding: 14px;
+            margin: 0 0 14px;
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            background: var(--input);
+            color: var(--text);
+            font-size: 16px;
+        }
+        .auth-submit {
+            width: 100%;
+            padding: 15px;
+            border-radius: 15px;
+            background: var(--pink);
+            color: white;
+            font-weight: 800;
+        }
+        .auth-error {
+            min-height: 20px;
+            margin-top: 12px;
+            color: var(--danger);
+            font-size: 13px;
+            text-align: center;
+        }
+        .logout-button {
+            padding: 9px 12px;
+            border-radius: 12px;
+            background: var(--pink-light);
+            color: var(--pink-dark);
+            font-size: 12px;
+            font-weight: 700;
+        }
+\n    </style>
 
     <!--
         APP VERSION
@@ -707,13 +772,26 @@
 
 <body>
 
-<div class="app">
+<section id="auth-screen" class="auth-screen" hidden>
+    <form id="auth-form" class="auth-panel">
+        <h1>🎄 Wunschliste</h1>
+        <p>Bela & Lola<br>Bitte meldet euch mit eurem gemeinsamen Zugang an.</p>
+        <label for="auth-email">E-Mail-Adresse</label>
+        <input id="auth-email" type="email" autocomplete="username" required placeholder="E-Mail">
+        <label for="auth-password">Passwort</label>
+        <input id="auth-password" type="password" autocomplete="current-password" required placeholder="Passwort">
+        <button id="auth-submit" class="auth-submit" type="submit">Anmelden</button>
+        <div id="auth-error" class="auth-error" role="alert"></div>
+    </form>
+</section>
+
+<div class="app" id="app-shell" hidden>
 
     <!-- HEADER -->
     <header>
         <h1 class="header-title">🎄 Wunschliste</h1>
 
-        <div class="header-actions">
+        <div class="header-actions">\n            <button type="button" id="logout-btn" class="logout-button">Abmelden</button>
             <button
                 type="button"
                 id="share-btn"
@@ -924,1145 +1002,463 @@
 </div>
 
 
-<script>
+<script type="module">
 "use strict";
 
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-/* ==========================================================
-   KONFIGURATION
-========================================================== */
+const SUPABASE_URL = "https://dbvrheizithkzticqkfu.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_yEBamlKOHKs-hP1l_74cGA_CtC_Iy3T";
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-const APP_VERSION = "2.0.0";
-
-const STORAGE_KEY = "christmas_wishes";
+const APP_VERSION = "3.0.0";
 const THEME_KEY = "theme";
-
-
-/* ==========================================================
-   STATE
-========================================================== */
 
 let currentPerson = "Bela";
 let currentImageBase64 = null;
-let wishes = {
-    Bela: [],
-    Lola: []
-};
+let currentUser = null;
+let wishes = { Bela: [], Lola: [] };
 
+const $ = id => document.getElementById(id);
+const toast = $("toast");
+const toastMessage = $("toast-message");
+const themeBtn = $("theme-btn");
+const themeIcon = $("theme-icon");
+const tabBela = $("tab-bela");
+const tabLola = $("tab-lola");
+const addWishBtn = $("add-wish-btn");
+const wishContainer = $("wish-container");
+const modal = $("wish-modal");
+const modalTitle = $("modal-title");
+const closeModalBtn = $("close-modal-btn");
+const editIndexInput = $("edit-index");
+const wishTitle = $("wish-title");
+const wishDesc = $("wish-desc");
+const wishPriority = $("wish-priority");
+const imageInput = $("image-input");
+const chooseImageBtn = $("choose-image-btn");
+const removeImageBtn = $("remove-image-btn");
+const imagePreviewContainer = $("image-preview-container");
+const imagePreview = $("image-preview");
+const saveWishBtn = $("save-wish-btn");
+const shareBtn = $("share-btn");
+const authScreen = $("auth-screen");
+const authForm = $("auth-form");
+const authEmail = $("auth-email");
+const authPassword = $("auth-password");
+const authError = $("auth-error");
+const authSubmit = $("auth-submit");
+const logoutBtn = $("logout-btn");
 
-/* ==========================================================
-   DOM
-========================================================== */
+document.addEventListener("DOMContentLoaded", init);
 
-const toast =
-    document.getElementById("toast");
-
-const toastMessage =
-    document.getElementById("toast-message");
-
-const themeBtn =
-    document.getElementById("theme-btn");
-
-const themeIcon =
-    document.getElementById("theme-icon");
-
-const tabBela =
-    document.getElementById("tab-bela");
-
-const tabLola =
-    document.getElementById("tab-lola");
-
-const addWishBtn =
-    document.getElementById("add-wish-btn");
-
-const wishContainer =
-    document.getElementById("wish-container");
-
-const modal =
-    document.getElementById("wish-modal");
-
-const modalTitle =
-    document.getElementById("modal-title");
-
-const closeModalBtn =
-    document.getElementById("close-modal-btn");
-
-const editIndexInput =
-    document.getElementById("edit-index");
-
-const wishTitle =
-    document.getElementById("wish-title");
-
-const wishDesc =
-    document.getElementById("wish-desc");
-
-const wishPriority =
-    document.getElementById("wish-priority");
-
-const imageInput =
-    document.getElementById("image-input");
-
-const chooseImageBtn =
-    document.getElementById("choose-image-btn");
-
-const removeImageBtn =
-    document.getElementById("remove-image-btn");
-
-const imagePreviewContainer =
-    document.getElementById("image-preview-container");
-
-const imagePreview =
-    document.getElementById("image-preview");
-
-const saveWishBtn =
-    document.getElementById("save-wish-btn");
-
-const shareBtn =
-    document.getElementById("share-btn");
-
-
-/* ==========================================================
-   START
-========================================================== */
-
-document.addEventListener(
-    "DOMContentLoaded",
-    init
-);
-
-
-function init() {
-    wishes = loadWishes();
-
+async function init() {
     initThemeIcon();
-
-    updateTabs();
-
-    renderWishes();
-
     bindEvents();
+
+    const { data, error } = await supabase.auth.getSession();
+    if (error) console.error("Session konnte nicht geladen werden:", error);
+    if (data?.session?.user) {
+        await enterApp(data.session.user);
+    } else {
+        showAuth();
+    }
+
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === "SIGNED_IN" && session?.user) {
+            await enterApp(session.user);
+        } else if (event === "SIGNED_OUT") {
+            currentUser = null;
+            wishes = { Bela: [], Lola: [] };
+            renderWishes();
+            showAuth();
+        }
+    });
 }
-
-
-/* ==========================================================
-   EVENTS
-========================================================== */
 
 function bindEvents() {
-
-    themeBtn.addEventListener(
-        "click",
-        toggleTheme
-    );
-
-    tabBela.addEventListener(
-        "click",
-        () => setPerson("Bela")
-    );
-
-    tabLola.addEventListener(
-        "click",
-        () => setPerson("Lola")
-    );
-
-    addWishBtn.addEventListener(
-        "click",
-        openAddModal
-    );
-
-    closeModalBtn.addEventListener(
-        "click",
-        closeModal
-    );
-
-    saveWishBtn.addEventListener(
-        "click",
-        saveWish
-    );
-
-    chooseImageBtn.addEventListener(
-        "click",
-        () => imageInput.click()
-    );
-
-    imageInput.addEventListener(
-        "change",
-        handleImageUpload
-    );
-
-    removeImageBtn.addEventListener(
-        "click",
-        clearImage
-    );
-
-    shareBtn.addEventListener(
-        "click",
-        shareWishlist
-    );
-
-    modal.addEventListener(
-        "click",
-        function (event) {
-            if (event.target === modal) {
-                closeModal();
-            }
-        }
-    );
+    authForm.addEventListener("submit", signIn);
+    logoutBtn.addEventListener("click", signOut);
+    themeBtn.addEventListener("click", toggleTheme);
+    tabBela.addEventListener("click", () => setPerson("Bela"));
+    tabLola.addEventListener("click", () => setPerson("Lola"));
+    addWishBtn.addEventListener("click", openAddModal);
+    closeModalBtn.addEventListener("click", closeModal);
+    saveWishBtn.addEventListener("click", saveWish);
+    chooseImageBtn.addEventListener("click", () => imageInput.click());
+    imageInput.addEventListener("change", handleImageUpload);
+    removeImageBtn.addEventListener("click", clearImage);
+    shareBtn.addEventListener("click", shareWishlist);
+    modal.addEventListener("click", event => {
+        if (event.target === modal) closeModal();
+    });
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape") closeModal();
+    });
 }
 
-
-/* ==========================================================
-   THEME
-========================================================== */
-
-function initThemeIcon() {
-
-    const isDark =
-        document.documentElement.classList.contains("dark");
-
-    themeIcon.textContent =
-        isDark ? "☀️" : "🌙";
+async function signIn(event) {
+    event.preventDefault();
+    authError.textContent = "";
+    authSubmit.disabled = true;
+    authSubmit.textContent = "Anmeldung läuft …";
+    const { error } = await supabase.auth.signInWithPassword({
+        email: authEmail.value.trim(),
+        password: authPassword.value
+    });
+    authSubmit.disabled = false;
+    authSubmit.textContent = "Anmelden";
+    if (error) authError.textContent = "Anmeldung fehlgeschlagen. Bitte E-Mail und Passwort prüfen.";
 }
 
-
-function toggleTheme() {
-
-    const html =
-        document.documentElement;
-
-    const isDark =
-        html.classList.toggle("dark");
-
-    try {
-        localStorage.setItem(
-            THEME_KEY,
-            isDark ? "dark" : "light"
-        );
-    } catch (error) {
-        console.warn(
-            "Theme konnte nicht gespeichert werden.",
-            error
-        );
-    }
-
-    themeIcon.textContent =
-        isDark ? "☀️" : "🌙";
+async function signOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) showToast("Abmelden fehlgeschlagen.");
 }
 
-
-/* ==========================================================
-   STORAGE
-========================================================== */
-
-function loadWishes() {
-
-    const emptyData = {
-        Bela: [],
-        Lola: []
-    };
-
-    try {
-
-        const saved =
-            localStorage.getItem(STORAGE_KEY);
-
-        if (!saved) {
-            return emptyData;
-        }
-
-        const parsed =
-            JSON.parse(saved);
-
-        return {
-            Bela:
-                Array.isArray(parsed.Bela)
-                    ? parsed.Bela
-                    : [],
-
-            Lola:
-                Array.isArray(parsed.Lola)
-                    ? parsed.Lola
-                    : []
-        };
-
-    } catch (error) {
-
-        console.warn(
-            "Wünsche konnten nicht geladen werden.",
-            error
-        );
-
-        return emptyData;
-    }
-}
-
-
-function saveWishes() {
-
-    try {
-
-        localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify(wishes)
-        );
-
-        return true;
-
-    } catch (error) {
-
-        console.error(
-            "Speichern fehlgeschlagen:",
-            error
-        );
-
-        showToast(
-            "Speichern fehlgeschlagen."
-        );
-
-        return false;
-    }
-}
-
-
-/* ==========================================================
-   TOAST
-========================================================== */
-
-let toastTimer = null;
-
-
-function showToast(message) {
-
-    clearTimeout(toastTimer);
-
-    toastMessage.textContent =
-        message;
-
-    toast.classList.add("show");
-
-    toastTimer =
-        setTimeout(() => {
-            toast.classList.remove("show");
-        }, 2400);
-}
-
-
-/* ==========================================================
-   PERSONEN
-========================================================== */
-
-function setPerson(person) {
-
-    currentPerson = person;
-
+async function enterApp(user) {
+    currentUser = user;
+    authScreen.hidden = true;
+    $("app-shell").hidden = false;
+    await loadWishes();
     updateTabs();
-
     renderWishes();
 }
 
+function showAuth() {
+    authScreen.hidden = false;
+    $("app-shell").hidden = true;
+    authPassword.value = "";
+    authEmail.focus();
+}
+
+function initThemeIcon() {
+    const isDark = document.documentElement.classList.contains("dark");
+    themeIcon.textContent = isDark ? "☀️" : "🌙";
+}
+
+function toggleTheme() {
+    const isDark = document.documentElement.classList.toggle("dark");
+    try {
+        localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
+    } catch (error) {
+        console.warn("Theme konnte nicht gespeichert werden.", error);
+    }
+    themeIcon.textContent = isDark ? "☀️" : "🌙";
+}
+
+let toastTimer = null;
+function showToast(message) {
+    clearTimeout(toastTimer);
+    toastMessage.textContent = message;
+    toast.classList.add("show");
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 2400);
+}
+
+function setPerson(person) {
+    currentPerson = person;
+    updateTabs();
+    renderWishes();
+}
 
 function updateTabs() {
-
-    tabBela.classList.toggle(
-        "active",
-        currentPerson === "Bela"
-    );
-
-    tabLola.classList.toggle(
-        "active",
-        currentPerson === "Lola"
-    );
+    tabBela.classList.toggle("active", currentPerson === "Bela");
+    tabLola.classList.toggle("active", currentPerson === "Lola");
 }
 
+async function loadWishes() {
+    const { data, error } = await supabase
+        .from("wishes")
+        .select("id, person, title, description, priority, image_url, created_at")
+        .order("created_at", { ascending: true });
 
-/* ==========================================================
-   MODAL
-========================================================== */
+    if (error) {
+        console.error("Wünsche konnten nicht geladen werden:", error);
+        showToast("Laden fehlgeschlagen. Bitte erneut anmelden.");
+        wishes = { Bela: [], Lola: [] };
+        return;
+    }
+
+    wishes = { Bela: [], Lola: [] };
+    for (const row of (data || [])) {
+        if (row.person !== "Bela" && row.person !== "Lola") continue;
+        wishes[row.person].push({
+            id: row.id,
+            title: row.title || "",
+            desc: row.description || "",
+            priority: row.priority || "🌟 Top-Wunsch",
+            image: row.image_url || null
+        });
+    }
+}
 
 function openAddModal() {
-
-    modalTitle.textContent =
-        "Wunsch hinzufügen";
-
-    editIndexInput.value =
-        "-1";
-
-    wishTitle.value =
-        "";
-
-    wishDesc.value =
-        "";
-
-    wishPriority.value =
-        "🌟 Top-Wunsch";
-
+    modalTitle.textContent = "Wunsch hinzufügen";
+    editIndexInput.value = "-1";
+    wishTitle.value = "";
+    wishDesc.value = "";
+    wishPriority.value = "🌟 Top-Wunsch";
     clearImage();
-
     modal.classList.add("open");
-
-    modal.setAttribute(
-        "aria-hidden",
-        "false"
-    );
-
-    setTimeout(() => {
-        wishTitle.focus();
-    }, 50);
+    modal.setAttribute("aria-hidden", "false");
+    setTimeout(() => wishTitle.focus(), 50);
 }
-
 
 function openEditModal(index) {
-
-    const item =
-        wishes[currentPerson][index];
-
-    if (!item) {
-        return;
-    }
-
-    modalTitle.textContent =
-        "Wunsch bearbeiten";
-
-    editIndexInput.value =
-        String(index);
-
-    wishTitle.value =
-        item.title || "";
-
-    wishDesc.value =
-        item.desc || "";
-
-    wishPriority.value =
-        item.priority ||
-        "🌟 Top-Wunsch";
-
-    currentImageBase64 =
-        item.image || null;
-
+    const item = wishes[currentPerson][index];
+    if (!item) return;
+    modalTitle.textContent = "Wunsch bearbeiten";
+    editIndexInput.value = String(index);
+    wishTitle.value = item.title || "";
+    wishDesc.value = item.desc || "";
+    wishPriority.value = item.priority || "🌟 Top-Wunsch";
+    currentImageBase64 = item.image || null;
     if (currentImageBase64) {
-
-        imagePreview.src =
-            currentImageBase64;
-
-        imagePreviewContainer.classList.add(
-            "visible"
-        );
-
-        removeImageBtn.classList.add(
-            "visible"
-        );
-
+        imagePreview.src = currentImageBase64;
+        imagePreviewContainer.classList.add("visible");
+        removeImageBtn.classList.add("visible");
     } else {
-
-        imagePreview.src =
-            "";
-
-        imagePreviewContainer.classList.remove(
-            "visible"
-        );
-
-        removeImageBtn.classList.remove(
-            "visible"
-        );
+        imagePreview.src = "";
+        imagePreviewContainer.classList.remove("visible");
+        removeImageBtn.classList.remove("visible");
     }
-
     modal.classList.add("open");
-
-    modal.setAttribute(
-        "aria-hidden",
-        "false"
-    );
-
-    setTimeout(() => {
-        wishTitle.focus();
-    }, 50);
+    modal.setAttribute("aria-hidden", "false");
+    setTimeout(() => wishTitle.focus(), 50);
 }
-
 
 function closeModal() {
-
-    modal.classList.remove(
-        "open"
-    );
-
-    modal.setAttribute(
-        "aria-hidden",
-        "true"
-    );
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
 }
 
-
-/* ==========================================================
-   BILD
-========================================================== */
-
 function handleImageUpload(event) {
-
-    const file =
-        event.target.files &&
-        event.target.files[0];
-
-    if (!file) {
-        return;
-    }
-
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
     if (!file.type.startsWith("image/")) {
-
-        showToast(
-            "Bitte ein Bild auswählen."
-        );
-
+        showToast("Bitte ein Bild auswählen.");
         imageInput.value = "";
-
         return;
     }
-
-    const reader =
-        new FileReader();
-
-    reader.onload =
-        function (readerEvent) {
-
-            const img =
-                new Image();
-
-            img.onload =
-                function () {
-
-                    const MAX_SIZE = 900;
-
-                    let width =
-                        img.width;
-
-                    let height =
-                        img.height;
-
-                    if (
-                        width > MAX_SIZE ||
-                        height > MAX_SIZE
-                    ) {
-
-                        if (width > height) {
-
-                            height =
-                                Math.round(
-                                    height *
-                                    MAX_SIZE /
-                                    width
-                                );
-
-                            width =
-                                MAX_SIZE;
-
-                        } else {
-
-                            width =
-                                Math.round(
-                                    width *
-                                    MAX_SIZE /
-                                    height
-                                );
-
-                            height =
-                                MAX_SIZE;
-                        }
-                    }
-
-                    const canvas =
-                        document.createElement(
-                            "canvas"
-                        );
-
-                    canvas.width =
-                        width;
-
-                    canvas.height =
-                        height;
-
-                    const ctx =
-                        canvas.getContext(
-                            "2d"
-                        );
-
-                    if (!ctx) {
-
-                        showToast(
-                            "Bild konnte nicht verarbeitet werden."
-                        );
-
-                        return;
-                    }
-
-                    ctx.drawImage(
-                        img,
-                        0,
-                        0,
-                        width,
-                        height
-                    );
-
-                    currentImageBase64 =
-                        canvas.toDataURL(
-                            "image/jpeg",
-                            0.75
-                        );
-
-                    imagePreview.src =
-                        currentImageBase64;
-
-                    imagePreviewContainer.classList.add(
-                        "visible"
-                    );
-
-                    removeImageBtn.classList.add(
-                        "visible"
-                    );
-                };
-
-            img.onerror =
-                function () {
-                    showToast(
-                        "Bild konnte nicht geladen werden."
-                    );
-                };
-
-            img.src =
-                readerEvent.target.result;
+    const reader = new FileReader();
+    reader.onload = readerEvent => {
+        const img = new Image();
+        img.onload = () => {
+            const maxSize = 900;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxSize || height > maxSize) {
+                if (width > height) {
+                    height = Math.round(height * maxSize / width);
+                    width = maxSize;
+                } else {
+                    width = Math.round(width * maxSize / height);
+                    height = maxSize;
+                }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+                showToast("Bild konnte nicht verarbeitet werden.");
+                return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
+            currentImageBase64 = canvas.toDataURL("image/jpeg", 0.72);
+            imagePreview.src = currentImageBase64;
+            imagePreviewContainer.classList.add("visible");
+            removeImageBtn.classList.add("visible");
         };
-
-    reader.onerror =
-        function () {
-            showToast(
-                "Bild konnte nicht gelesen werden."
-            );
-        };
-
+        img.onerror = () => showToast("Bild konnte nicht geladen werden.");
+        img.src = readerEvent.target.result;
+    };
+    reader.onerror = () => showToast("Bild konnte nicht gelesen werden.");
     reader.readAsDataURL(file);
 }
 
-
 function clearImage() {
-
-    currentImageBase64 =
-        null;
-
-    imageInput.value =
-        "";
-
-    imagePreview.src =
-        "";
-
-    imagePreviewContainer.classList.remove(
-        "visible"
-    );
-
-    removeImageBtn.classList.remove(
-        "visible"
-    );
+    currentImageBase64 = null;
+    imageInput.value = "";
+    imagePreview.src = "";
+    imagePreviewContainer.classList.remove("visible");
+    removeImageBtn.classList.remove("visible");
 }
 
-
-/* ==========================================================
-   WUNSCH SPEICHERN
-========================================================== */
-
-function saveWish() {
-
-    const title =
-        wishTitle.value.trim();
-
-    const desc =
-        wishDesc.value.trim();
-
-    const priority =
-        wishPriority.value;
-
+async function saveWish() {
+    const title = wishTitle.value.trim();
     if (!title) {
-
-        showToast(
-            "Bitte einen Wunsch eingeben."
-        );
-
+        showToast("Bitte einen Wunsch eingeben.");
         wishTitle.focus();
-
         return;
     }
 
-    const index =
-        Number(
-            editIndexInput.value
-        );
+    const index = Number(editIndexInput.value);
+    const existing = Number.isInteger(index) && index >= 0
+        ? wishes[currentPerson][index]
+        : null;
 
-    const item = {
-        title: title,
-        desc: desc,
-        priority: priority,
-        image: currentImageBase64
+    const payload = {
+        person: currentPerson,
+        title,
+        description: wishDesc.value.trim(),
+        priority: wishPriority.value,
+        image_url: currentImageBase64
     };
 
-    if (
-        Number.isInteger(index) &&
-        index >= 0 &&
-        index < wishes[currentPerson].length
-    ) {
+    saveWishBtn.disabled = true;
+    try {
+        let result;
+        if (existing?.id) {
+            result = await supabase.from("wishes").update(payload).eq("id", existing.id);
+        } else {
+            result = await supabase.from("wishes").insert(payload);
+        }
+        if (result.error) throw result.error;
 
-        wishes[currentPerson][index] =
-            item;
-
-        showToast(
-            "Wunsch aktualisiert."
-        );
-
-    } else {
-
-        wishes[currentPerson].push(
-            item
-        );
-
-        showToast(
-            "Wunsch gespeichert."
-        );
+        await loadWishes();
+        renderWishes();
+        closeModal();
+        showToast(existing ? "Wunsch aktualisiert." : "Wunsch gespeichert.");
+    } catch (error) {
+        console.error("Wunsch konnte nicht gespeichert werden:", error);
+        showToast("Speichern fehlgeschlagen. Bitte erneut versuchen.");
+    } finally {
+        saveWishBtn.disabled = false;
     }
-
-    if (!saveWishes()) {
-        return;
-    }
-
-    renderWishes();
-
-    closeModal();
 }
-
-
-/* ==========================================================
-   WÜNSCHE RENDERN
-========================================================== */
 
 function renderWishes() {
-
-    wishContainer.innerHTML =
-        "";
-
-    const list =
-        wishes[currentPerson] ||
-        [];
+    wishContainer.innerHTML = "";
+    const list = wishes[currentPerson] || [];
 
     if (list.length === 0) {
-
-        const empty =
-            document.createElement(
-                "div"
-            );
-
-        empty.className =
-            "empty";
-
-        const icon =
-            document.createElement(
-                "span"
-            );
-
-        icon.className =
-            "empty-icon";
-
-        icon.textContent =
-            "🎁";
-
-        const text =
-            document.createElement(
-                "div"
-            );
-
-        text.textContent =
-            `Noch keine Wünsche für ${currentPerson} eingetragen.`;
-
-        empty.appendChild(
-            icon
-        );
-
-        empty.appendChild(
-            text
-        );
-
-        wishContainer.appendChild(
-            empty
-        );
-
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        const icon = document.createElement("span");
+        icon.className = "empty-icon";
+        icon.textContent = "🎁";
+        const text = document.createElement("div");
+        text.textContent = `Noch keine Wünsche für ${currentPerson} eingetragen.`;
+        empty.append(icon, text);
+        wishContainer.appendChild(empty);
         return;
     }
 
-    list.forEach(
-        (item, index) => {
+    list.forEach((item, index) => {
+        const card = document.createElement("div");
+        card.className = "wish-card";
 
-            const card =
-                document.createElement(
-                    "div"
-                );
-
-            card.className =
-                "wish-card";
-
-
-            /* BILD */
-
-            if (item.image) {
-
-                const img =
-                    document.createElement(
-                        "img"
-                    );
-
-                img.className =
-                    "wish-image";
-
-                img.src =
-                    item.image;
-
-                img.alt =
-                    item.title || "Wunsch";
-
-                card.appendChild(
-                    img
-                );
-
-            } else {
-
-                const placeholder =
-                    document.createElement(
-                        "div"
-                    );
-
-                placeholder.className =
-                    "wish-image-placeholder";
-
-                placeholder.textContent =
-                    "🎁";
-
-                card.appendChild(
-                    placeholder
-                );
-            }
-
-
-            /* CONTENT */
-
-            const content =
-                document.createElement(
-                    "div"
-                );
-
-            content.className =
-                "wish-content";
-
-
-            const title =
-                document.createElement(
-                    "h3"
-                );
-
-            title.className =
-                "wish-title";
-
-            title.textContent =
-                item.title || "";
-
-            content.appendChild(
-                title
-            );
-
-
-            if (item.desc) {
-
-                const desc =
-                    document.createElement(
-                        "p"
-                    );
-
-                desc.className =
-                    "wish-desc";
-
-                desc.textContent =
-                    item.desc;
-
-                content.appendChild(
-                    desc
-                );
-            }
-
-
-            if (item.priority) {
-
-                const priority =
-                    document.createElement(
-                        "span"
-                    );
-
-                priority.className =
-                    "priority";
-
-                priority.textContent =
-                    item.priority;
-
-                content.appendChild(
-                    priority
-                );
-            }
-
-            card.appendChild(
-                content
-            );
-
-
-            /* ACTIONS */
-
-            const actions =
-                document.createElement(
-                    "div"
-                );
-
-            actions.className =
-                "card-actions";
-
-
-            const editBtn =
-                document.createElement(
-                    "button"
-                );
-
-            editBtn.type =
-                "button";
-
-            editBtn.className =
-                "small-button";
-
-            editBtn.textContent =
-                "✏️";
-
-            editBtn.setAttribute(
-                "aria-label",
-                "Wunsch bearbeiten"
-            );
-
-            editBtn.addEventListener(
-                "click",
-                function () {
-                    openEditModal(index);
-                }
-            );
-
-
-            const deleteBtn =
-                document.createElement(
-                    "button"
-                );
-
-            deleteBtn.type =
-                "button";
-
-            deleteBtn.className =
-                "small-button delete";
-
-            deleteBtn.textContent =
-                "🗑️";
-
-            deleteBtn.setAttribute(
-                "aria-label",
-                "Wunsch löschen"
-            );
-
-            deleteBtn.addEventListener(
-                "click",
-                function () {
-                    deleteWish(index);
-                }
-            );
-
-
-            actions.appendChild(
-                editBtn
-            );
-
-            actions.appendChild(
-                deleteBtn
-            );
-
-            card.appendChild(
-                actions
-            );
-
-
-            wishContainer.appendChild(
-                card
-            );
+        if (item.image) {
+            const img = document.createElement("img");
+            img.className = "wish-image";
+            img.src = item.image;
+            img.alt = item.title || "Wunsch";
+            card.appendChild(img);
+        } else {
+            const placeholder = document.createElement("div");
+            placeholder.className = "wish-image-placeholder";
+            placeholder.textContent = "🎁";
+            card.appendChild(placeholder);
         }
-    );
+
+        const content = document.createElement("div");
+        content.className = "wish-content";
+        const title = document.createElement("h3");
+        title.className = "wish-title";
+        title.textContent = item.title || "";
+        content.appendChild(title);
+
+        if (item.desc) {
+            const desc = document.createElement("p");
+            desc.className = "wish-desc";
+            desc.textContent = item.desc;
+            content.appendChild(desc);
+        }
+        if (item.priority) {
+            const priority = document.createElement("span");
+            priority.className = "priority";
+            priority.textContent = item.priority;
+            content.appendChild(priority);
+        }
+        card.appendChild(content);
+
+        const actions = document.createElement("div");
+        actions.className = "card-actions";
+
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "small-button";
+        editBtn.textContent = "✏️";
+        editBtn.setAttribute("aria-label", "Wunsch bearbeiten");
+        editBtn.addEventListener("click", () => openEditModal(index));
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "small-button delete";
+        deleteBtn.textContent = "🗑️";
+        deleteBtn.setAttribute("aria-label", "Wunsch löschen");
+        deleteBtn.addEventListener("click", () => deleteWish(index));
+
+        actions.append(editBtn, deleteBtn);
+        card.appendChild(actions);
+        wishContainer.appendChild(card);
+    });
 }
 
+async function deleteWish(index) {
+    const item = wishes[currentPerson][index];
+    if (!item?.id) return;
+    if (!window.confirm(`„${item.title}“ wirklich löschen?`)) return;
 
-/* ==========================================================
-   LÖSCHEN
-========================================================== */
-
-function deleteWish(index) {
-
-    const item =
-        wishes[currentPerson][index];
-
-    if (!item) {
+    const { error } = await supabase.from("wishes").delete().eq("id", item.id);
+    if (error) {
+        console.error("Löschen fehlgeschlagen:", error);
+        showToast("Löschen fehlgeschlagen.");
         return;
     }
-
-    const confirmed =
-        window.confirm(
-            `„${item.title}“ wirklich löschen?`
-        );
-
-    if (!confirmed) {
-        return;
-    }
-
-    wishes[currentPerson].splice(
-        index,
-        1
-    );
-
-    saveWishes();
-
+    await loadWishes();
     renderWishes();
-
-    showToast(
-        "Wunsch gelöscht."
-    );
+    showToast("Wunsch gelöscht.");
 }
-
-
-/* ==========================================================
-   TEILEN
-========================================================== */
 
 async function shareWishlist() {
-
-    const data =
-        createShareText();
-
-    if (
-        navigator.share
-    ) {
-
+    const data = createShareText();
+    if (navigator.share) {
         try {
-
-            await navigator.share({
-                title:
-                    "Wunschliste Bela & Lola",
-
-                text:
-                    data
-            });
-
+            await navigator.share({ title: "Wunschliste Bela & Lola", text: data });
             return;
-
         } catch (error) {
-
-            /*
-             * Abbrechen beim iPhone-Share-Sheet
-             * ist kein Fehler.
-             */
-            if (
-                error &&
-                error.name === "AbortError"
-            ) {
-                return;
-            }
+            if (error?.name === "AbortError") return;
         }
     }
-
     try {
-
-        await navigator.clipboard.writeText(
-            data
-        );
-
-        showToast(
-            "Wunschliste kopiert."
-        );
-
+        await navigator.clipboard.writeText(data);
+        showToast("Wunschliste kopiert.");
     } catch (error) {
-
-        showToast(
-            "Teilen nicht möglich."
-        );
+        showToast("Teilen nicht möglich.");
     }
 }
-
 
 function createShareText() {
-
-    let text =
-        "🎄 Wunschliste Bela & Lola\n\n";
-
-    for (
-        const person of ["Bela", "Lola"]
-    ) {
-
-        text +=
-            `${person}:\n`;
-
-        const list =
-            wishes[person] || [];
-
+    let text = "🎄 Wunschliste Bela & Lola\n\n";
+    for (const person of ["Bela", "Lola"]) {
+        text += `${person}:\n`;
+        const list = wishes[person] || [];
         if (list.length === 0) {
-
-            text +=
-                "– Keine Wünsche\n\n";
-
+            text += "– Keine Wünsche\n\n";
             continue;
         }
-
-        list.forEach(
-            item => {
-
-                text +=
-                    `• ${item.title}`;
-
-                if (item.priority) {
-                    text +=
-                        ` (${item.priority})`;
-                }
-
-                if (item.desc) {
-                    text +=
-                        `\n  ${item.desc}`;
-                }
-
-                text +=
-                    "\n";
-            }
-        );
-
-        text +=
-            "\n";
+        list.forEach(item => {
+            text += `• ${item.title}`;
+            if (item.priority) text += ` (${item.priority})`;
+            if (item.desc) text += `\n  ${item.desc}`;
+            text += "\n";
+        });
+        text += "\n";
     }
-
     return text;
 }
-
-
-/* ==========================================================
-   ESC = MODAL SCHLIESSEN
-========================================================== */
-
-document.addEventListener(
-    "keydown",
-    function (event) {
-
-        if (
-            event.key === "Escape"
-        ) {
-            closeModal();
-        }
-    }
-);
-
 </script>
 
 </body>
